@@ -1,54 +1,62 @@
+
+# 1. Import libraries and dataset, explore basic info
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-import matplotlib.pyplot as plt
 import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
 
-# 1. Load the dataset
-url = "https://web.stanford.edu/class/archive/cs/cs109/cs109.1166/stuff/titanic.csv"
-df = pd.read_csv(url)
+# Load Titanic dataset from seaborn
+df = sns.load_dataset('titanic')
 
-# 2. Preview data & check info
-print(df.head())
+
+# Explore dataset info and null counts
 print(df.info())
-print(df.isnull().sum())  # Check missing value counts
+print(df.isnull().sum())
 
-# 3. Fill missing Age values with the median, Fare with the mean (if present)
-if df['Age'].isnull().sum() > 0:
-    df['Age'] = df['Age'].fillna(df['Age'].median())
-if df['Fare'].isnull().sum() > 0:
-    df['Fare'] = df['Fare'].fillna(df['Fare'].mean())
+# 2. Handle missing values
+# For 'age' (numerical), fill missing values with median
+df['age'].fillna(df['age'].median(), inplace=True)
 
-# 4. Encode categorical 'Sex' column
-df['Sex'] = df['Sex'].map({'male': 0, 'female': 1})
+# For 'embarked' (categorical), fill missing with mode
+df['embarked'].fillna(df['embarked'].mode()[0], inplace=True)
 
-# 5. Normalize/standardize numerical features
+# Drop columns with too many missing values or irrelevant for ML
+df.drop(columns=['deck', 'embark_town', 'alive', 'class', 'who', 'adult_male', 'alone'], inplace=True)
+
+# Drop rows with any remaining missing values
+df.dropna(inplace=True)
+
+# 3. Convert categorical features into numerical using encoding
+# For categorical variables: 'sex', 'embarked'
+df = pd.get_dummies(df, columns=['sex', 'embarked'], drop_first=True)
+
+# 4. Normalize/standardize numerical features
 scaler = StandardScaler()
-df[['Age', 'Fare']] = scaler.fit_transform(df[['Age', 'Fare']])
+num_cols = ['age', 'fare', 'sibsp', 'parch']
 
-# 6. Visualize outliers using boxplots
-plt.figure(figsize=(12, 6))
-sns.boxplot(x=df['Fare'])
-plt.title('Boxplot of Fare')
-plt.show()
+df[num_cols] = scaler.fit_transform(df[num_cols])
 
-plt.figure(figsize=(12, 6))
-sns.boxplot(x=df['Age'])
-plt.title('Boxplot of Age')
-plt.show()
+# 5. Visualize outliers using boxplots and remove them
+for col in num_cols:
+    plt.figure(figsize=(6, 3))
+    sns.boxplot(x=df[col])
+    plt.title(f'Boxplot of {col}')
+    plt.show()
 
-# 7. Remove outliers in 'Fare' using IQR
-Q1_fare = df['Fare'].quantile(0.25)
-Q3_fare = df['Fare'].quantile(0.75)
-IQR_fare = Q3_fare - Q1_fare
-df = df[(df['Fare'] >= Q1_fare - 1.5 * IQR_fare) & (df['Fare'] <= Q3_fare + 1.5 * IQR_fare)]
+# Define a function to remove outliers based on IQR
+def remove_outliers(df, col):
+    Q1 = df[col].quantile(0.25)
+    Q3 = df[col].quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5*IQR
+    upper_bound = Q3 + 1.5*IQR
+    return df[(df[col] >= lower_bound) & (df[col] <= upper_bound)]
 
-# Remove outliers in 'Age' using IQR
-Q1_age = df['Age'].quantile(0.25)
-Q3_age = df['Age'].quantile(0.75)
-IQR_age = Q3_age - Q1_age
-df = df[(df['Age'] >= Q1_age - 1.5 * IQR_age) & (df['Age'] <= Q3_age + 1.5 * IQR_age)]
+# Remove outliers iteratively for all numerical columns
+for col in num_cols:
+    df = remove_outliers(df, col)
 
-# Final overview
+# Final dataset info
 print(df.info())
 print(df.head())
